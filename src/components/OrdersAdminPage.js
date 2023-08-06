@@ -1,124 +1,124 @@
 import React, { useEffect, useState } from "react";
-import { Badge, Button, Modal, Table } from "react-bootstrap";
-import { useSelector } from "react-redux";
-import axios from "../axios";
-import Loading from "./Loading";
-import Pagination from "./Pagination";
+import { Table } from "react-bootstrap";
+import axios from "axios";
+import Cookies from "js-cookie";
 
 function OrdersAdminPage() {
-    const [orders, setOrders] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const products = useSelector((state) => state.products);
-    const [orderToShow, setOrderToShow] = useState([]);
-    const [show, setShow] = useState(false);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const token = Cookies.get("jwt");
+  console.log(orders);
 
-    const handleClose = () => setShow(false);
-
-    function markShipped(orderId, ownerId) {
-        axios
-            .patch(`/orders/${orderId}/mark-shipped`, { ownerId })
-            .then(({ data }) => setOrders(data))
-            .catch((e) => console.log(e));
-    }
-
-    function showOrder(productsObj) {
-        let productsToShow = products.filter((product) => productsObj[product._id]);
-        productsToShow = productsToShow.map((product) => {
-            const productCopy = { ...product };
-            productCopy.count = productsObj[product._id];
-            delete productCopy.description;
-            return productCopy;
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await axios.get("http://localhost:8000/api/order", {
+          headers: { authorization: `Bearer ${token}` },
         });
-        console.log(productsToShow);
-        setShow(true);
-        setOrderToShow(productsToShow);
-    }
+        setOrders(response.data);
+        setLoading(false);
+      } catch (error) {
+        console.log(error);
+      }
+    };
 
-    useEffect(() => {
-        setLoading(true);
-        axios
-            .get("/orders")
-            .then(({ data }) => {
-                setLoading(false);
-                setOrders(data);
-            })
-            .catch((e) => {
-                setLoading(false);
-            });
-    }, []);
+    fetchData();
+  }, []);
 
-    if (loading) {
-        return <Loading />;
-    }
-
-    if (orders.length === 0) {
-        return <h1 className="text-center pt-4">No orders yet</h1>;
-    }
-
-    function TableRow({ _id, count, owner, total, status, products, address }) {
-        return (
-            <tr>
-                <td>{_id}</td>
-                <td>{owner?.name}</td>
-                <td>{count}</td>
-                <td>{total}</td>
-                <td>{address}</td>
-                <td>
-                    {status === "processing" ? (
-                        <Button size="sm" onClick={() => markShipped(_id, owner?._id)}>
-                            Mark as shipped
-                        </Button>
-                    ) : (
-                        <Badge bg="success">Shipped</Badge>
-                    )}
-                </td>
-                <td>
-                    <span style={{ cursor: "pointer" }} onClick={() => showOrder(products)}>
-                        View order <i className="fa fa-eye"></i>
-                    </span>
-                </td>
-            </tr>
+  const handlechange = async (orderid, status) => {
+    try {
+      if (status === "Cancelled") {
+        const confirmDelete = window.confirm(
+          "Are you sure you want to cancel this order?"
         );
+        if (!confirmDelete) return; // If the user cancels the delete action, do nothing.
+      }
+
+      await axios.patch(
+        `http://localhost:8000/api/order/${orderid}`,
+        {
+          status,
+        },
+        {
+          headers: {
+            authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      // If the update is successful, update the state to reflect the new status
+      setOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order.id === orderid ? { ...order, status } : order
+        )
+      );
+
+      if (status === "Cancelled") {
+        await axios.delete(`http://localhost:8000/api/order/${orderid}`, {
+          headers: {
+            authorization: `Bearer ${token}`,
+          },
+        });
+        setOrders((prevOrders) =>
+          prevOrders.filter((order) => order.id !== orderid)
+        );
+      }
+    } catch (error) {
+      console.log(error);
     }
+  };
 
-    return (
-        <>
-            <Table responsive striped bordered hover>
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Client Name</th>
-                        <th>Items</th>
-                        <th>Order Total</th>
-                        <th>Address</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <Pagination data={orders} RenderComponent={TableRow} pageLimit={1} dataLimit={10} tablePagination={true} />
-                </tbody>
-            </Table>
+  if (loading) {
+    return <p>Loading...</p>;
+  }
 
-            <Modal show={show} onHide={handleClose}>
-                <Modal.Header closeButton>
-                    <Modal.Title>Order details</Modal.Title>
-                </Modal.Header>
-                {orderToShow.map((order) => (
-                    <div className="order-details__container d-flex justify-content-around py-2">
-                        <img src={order.pictures[0].url} style={{ maxWidth: 100, height: 100, objectFit: "cover" }} />
-                        <p>
-                            <span>{order.count} x </span> {order.name}
-                        </p>
-                        <p>Price: ${Number(order.price) * order.count}</p>
-                    </div>
-                ))}
-                <Modal.Footer>
-                    <Button variant="secondary" onClick={handleClose}>
-                        Close
-                    </Button>
-                </Modal.Footer>
-            </Modal>
-        </>
-    );
+  return (
+    <div className="table-container">
+      <Table responsive striped bordered hover>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Client Name</th>
+            <th>Items</th>
+            <th>Order Total</th>
+            <th>Address</th>
+            <th>PhoneNumber</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {orders.map((order) => (
+            <tr key={order.id}>
+              <td>{order.id}</td>
+              <td>{order.User.Username}</td>
+              <td>{order.Products[0]?.title}</td>
+              <td>
+                $
+                {order.Products[0]?.Price *
+                  order.Products[0]?.OrderDetail.Quantity}
+              </td>
+              <td>{order.Address}</td>
+              <td>{order.Phonenumber}</td>
+              <td>
+                <select
+                  value={order.status}
+                  onChange={(e) => handlechange(order.id, e.target.value)}
+                >
+                  {["Pending", "Approved", "Delivered", "Cancelled"].map(
+                    (status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    )
+                  )}
+                </select>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    </div>
+  );
 }
 
 export default OrdersAdminPage;

@@ -1,92 +1,118 @@
-import { CardElement, useElements, useStripe } from "@stripe/react-stripe-js";
+// CheckoutForm.js
 import React, { useState } from "react";
 import { Alert, Button, Col, Form, Row } from "react-bootstrap";
-import { useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
-import { useCreateOrderMutation } from "../services/appApi";
+import { useLocation, useNavigate } from "react-router-dom";
+import "./CheckoutForm.css"; // Import the custom CSS file
+import axios from "axios";
+import Cookies from "js-cookie";
+import { ToastContainer, toast } from "react-toastify";
 
 function CheckoutForm() {
-    const stripe = useStripe();
-    const elements = useElements();
-    const user = useSelector((state) => state.user);
-    const navigate = useNavigate();
-    const [alertMessage, setAlertMessage] = useState("");
-    const [createOrder, { isLoading, isError, isSuccess }] = useCreateOrderMutation();
-    const [country, setCountry] = useState("");
-    const [address, setAddress] = useState("");
-    const [paying, setPaying] = useState(false);
-
-    async function handlePay(e) {
-        e.preventDefault();
-        if (!stripe || !elements || user.cart.count <= 0) return;
-        setPaying(true);
-        const { client_secret } = await fetch("http://localhost:8080/create-payment", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: "Bearer ",
-            },
-            body: JSON.stringify({ amount: user.cart.total }),
-        }).then((res) => res.json());
-        const { paymentIntent } = await stripe.confirmCardPayment(client_secret, {
-            payment_method: {
-                card: elements.getElement(CardElement),
-            },
-        });
-        setPaying(false);
-
-        if (paymentIntent) {
-            createOrder({ userId: user._id, cart: user.cart, address, country }).then((res) => {
-                if (!isLoading && !isError) {
-                    setAlertMessage(`Payment ${paymentIntent.status}`);
-                    setTimeout(() => {
-                        // navigate("/orders");
-                    }, 3000);
-                }
-            });
+  const navigate = useNavigate();
+  const [alertMessage, setAlertMessage] = useState("");
+  const location = useLocation();
+  const [phonenumber, setphonenumber] = useState("");
+  const [email, setEmail] = useState("");
+  const [address, setAddress] = useState("");
+  const [paying, setPaying] = useState(false);
+  const OrderDetails = location.state.OrderDetail;
+  async function handlePay(e) {
+    e.preventDefault();
+    const token = Cookies.get("jwt");
+    try {
+      await axios.post(
+        "http://localhost:8000/api/order",
+        {
+          email,
+          address,
+          phonenumber,
+          OrderDetails,
+        },
+        {
+          headers: {
+            authorization: `Bearer ${token}`,
+          },
         }
+      );
+      toast.success("🦄 Your Order is Succesfull, We will contact you soon!", {
+        position: "top-center",
+        autoClose: 4000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        progress: undefined,
+        theme: "light",
+      });
+      window.location.href = "/";
+    } catch (error) {
+      // Handle error
     }
+  }
 
-    return (
-        <Col className="cart-payment-container">
-            <Form onSubmit={handlePay}>
-                <Row>
-                    {alertMessage && <Alert>{alertMessage}</Alert>}
-                    <Col md={6}>
-                        <Form.Group className="mb-3">
-                            <Form.Label>First Name</Form.Label>
-                            <Form.Control type="text" placeholder="First Name" value={user.name} disabled />
-                        </Form.Group>
-                    </Col>
-                    <Col md={6}>
-                        <Form.Group className="mb-3">
-                            <Form.Label>Email</Form.Label>
-                            <Form.Control type="text" placeholder="Email" value={user.email} disabled />
-                        </Form.Group>
-                    </Col>
-                </Row>
-                <Row>
-                    <Col md={7}>
-                        <Form.Group className="mb-3">
-                            <Form.Label>Address</Form.Label>
-                            <Form.Control type="text" placeholder="Address" value={address} onChange={(e) => setAddress(e.target.value)} required />
-                        </Form.Group>
-                    </Col>
-                    <Col md={5}>
-                        <Form.Group className="mb-3">
-                            <Form.Label>Country</Form.Label>
-                            <Form.Control type="text" placeholder="Country" value={country} onChange={(e) => setCountry(e.target.value)} required />
-                        </Form.Group>
-                    </Col>
-                </Row>
-                <label htmlFor="card-element">Card</label>
-                <CardElement id="card-element" />
-                <Button className="mt-3" type="submit" disabled={user.cart.count <= 0 || paying || isSuccess}>
-                    {paying ? "Processing..." : "Pay"}
-                </Button>
-            </Form>
-        </Col>
-    );
+  return (
+    <div className="form-container">
+      <Col className="cart-payment-container">
+        <Form onSubmit={handlePay}>
+          <Row>
+            <Col md={7}>
+              <Form.Group className="mb-3">
+                <Form.Label>Address</Form.Label>
+                <Form.Control
+                  type="text"
+                  placeholder="Address"
+                  id="address"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  required
+                />
+              </Form.Group>
+            </Col>
+            <Col md={5}>
+              <Form.Group className="mb-3">
+                <Form.Label>Email</Form.Label>
+                <Form.Control
+                  type="email"
+                  placeholder="Email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </Form.Group>
+            </Col>
+          </Row>
+          <Row>
+            <Col md={12}>
+              <Form.Group className="mb-3">
+                <Form.Label>Phonenumber</Form.Label>
+                <Form.Control
+                  placeholder="Phonenumber"
+                  required
+                  value={phonenumber}
+                  onChange={(e) => setphonenumber(e.target.value)}
+                />
+              </Form.Group>
+            </Col>
+          </Row>
+          {/* Add Stripe CardElement and other payment-related components here */}
+          {/* ... */}
+          <Button type="submit">Place Order</Button>
+        </Form>
+        <ToastContainer
+          position="top-center"
+          autoClose={5000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme="light"
+        />
+      </Col>
+    </div>
+  );
 }
 
 export default CheckoutForm;
